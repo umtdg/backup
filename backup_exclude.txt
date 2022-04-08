@@ -1,0 +1,16 @@
+/dev/*
+/proc/*
+/sys/*
+/tmp/*
+/run/*
+/mnt/*
+/media/*
+/lost+found
+cache/*
+.cache/*
+/home/*/localdisk/*
+/home/*/ssd500/*
+/home/*/ubuntu/*
+/home/*/wdbackup/*
+/home/*/wdmypassport/*
+/home/*/windows/*

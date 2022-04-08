@@ -1,0 +1,105 @@
+#!/bin/bash
+
+devpath="/dev/sdd"
+name="backupdrive"
+mount_point="$HOME/wdbackup"
+fstype="ext4"
+exclude_from="backup_exclude.txt"
+external=""
+dry_run="no"
+
+usage() {
+    echo "Usage: $0 [OPTIONS...]"
+    echo "Options:"
+    echo "  -d | Device path (default /dev/sdd)"
+    echo "  -n | Name of the device (default backupdrive)"
+    echo "  -m | Mount point (default ~/wdbackup)"
+    echo "  -t | Type of the filesystem to mount (default ext4)"
+    echo "  -f | File to use for excludes (default backup_exclude.txt)"
+    echo "  -e | Backup only external drive"
+    echo "  -r | Dry run"
+    echo "  -h | Print this message and exit"
+}
+
+open_device() {
+    # Check if given exclude file exists
+    if [[ -f "${exclude_from}" ]]; then
+        echo "Found ${exclude_from}"
+    else
+        echo "Could not found ${exclude_from}"
+        exit 1
+    fi
+
+    # Check if LUKS device is already opened
+    if ! sudo cryptsetup status "$name" 1>/dev/null 2>/dev/null; then
+        echo "Opening device $devpath with name $name"
+        sudo cryptsetup open "$devpath" "$name" || { echo "Could not open crypt device"; exit 1; }
+    else
+        echo "Device is already opened"
+    fi
+
+    # Check if mount point exists
+    if ! mountpoint -q "$mount_point"; then
+        echo "Mounting /dev/mapper/$name to $mount_point"
+        sudo mount -t "$fstype" "/dev/mapper/$name" "$mount_point" || { echo "Mount failed"; exit 1; }
+    else
+        echo "Mount point $mount_point exists"
+    fi
+}
+
+close_device() {
+    echo "Unmounting $mount_point"
+    sudo umount "$mount_point" || { echo "Umount failed"; exit 1; }
+
+    echo "Closing crypt device"
+    sudo cryptsetup close "$name" || { echo "Could not close crypt device"; exit 1; }
+}
+
+while getopts ":d:n:m:t:e:rh" opt; do
+    case "${opt}" in
+        d)
+            devpath="$OPTARG" ;;
+        n)
+            name="$OPTARG" ;;
+        m)
+            mount_point="$OPTARG" ;;
+        t)
+            fstype="$OPTARG" ;;
+        e)
+            external="$OPTARG" ;;
+        r)
+            dry_run="yes" ;;
+        h)
+            usage
+            exit 0 ;;
+        *)
+            usage
+            exit 1 ;;
+    esac
+done
+shift $((OPTIND-1))
+
+open_device
+
+rsync_copy_opts="-aAXHv"
+[[ "${dry_run}" = "yes" ]] && rsync_copy_opts="${rsync_copy_opts}n"
+
+if [ -n "$external" ]; then
+    drive_name="$(basename "$external")"
+    rsync_opts=("$rsync_copy_opts" \
+                "--exclude-from=$exclude_from" \
+                "$external" \
+                "$mount_point/$drive_name-backup-$(date +%F_%T)")
+    echo "rsync ${rsync_opts[@]}"
+    rsync "${rsync_opts[@]}"
+else
+    rsync_opts=("$rsync_copy_opts" \
+                "--exclude-from=$exclude_from" \
+                "/" \
+                "$mount_point/${HOSTNAME:-$USER}-backup-$(date +%F_%T)")
+    echo "rsync ${rsync_opts[@]}"
+    sudo rsync "${rsync_opts[@]}"
+fi
+
+close_device
+
