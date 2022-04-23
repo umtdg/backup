@@ -174,7 +174,7 @@ rsync_copy_opts="-aAXHv"
 [[ "${dry_run}" = "yes" ]] && rsync_copy_opts="${rsync_copy_opts}n"
 
 rsync_opts=("${rsync_copy_opts}" "--info=progress2" "--exclude-from=${exclude_from}" "${source_dir}" "${mount_point}/${backup_name}")
-prompt -i "Issuing command sudo rsync ${rsync_opts[@]}\n"
+prompt -i "Issuing command sudo rsync ${rsync_opts[*]}\n"
 sudo rsync "${rsync_opts[@]}"
 
 echo
