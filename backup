@@ -91,7 +91,6 @@ close_device() {
 }
 
 while [[ $# -gt 0 ]]; do
-
     case "$1" in
     -b | --device)
         devpath="$2"
@@ -126,7 +125,6 @@ while [[ $# -gt 0 ]]; do
         exit 1
         ;;
     esac
-
 done
 
 # Check params
@@ -148,10 +146,11 @@ case "${source_dir}" in
 esac
 
 # Backup name (destination directory name)
+backup_name="${HOSTNAME:-${USER:-unknown}}"
 if [ "${source_dir}" = "/" ]; then
-    backup_name="${HOSTNAME:-$USER}-$(date +%F_%T)"
+    backup_name="${backup_name}-$(date +%F_%T)"
 else
-    backup_name="${HOSTNAME:-$USER}-$(basename "${source_dir}")-$(date +%F_%T)"
+    backup_name="${backup_name}-$(basename "${source_dir}")-$(date +%F_%T)"
 fi
 
 # Mount point (where to mount decrypted deivce)
