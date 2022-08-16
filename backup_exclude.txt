@@ -14,3 +14,4 @@ cache/*
 /home/*/wdbackup/*
 /home/*/wdmypassport/*
 /home/*/windows/*
+/home/*/ssd200/*
