@@ -172,7 +172,7 @@ sudo mount "/dev/mapper/${name}" "${mount_point}" || { prompt -e "Failed to moun
 rsync_copy_opts="-aAXHv"
 [[ "${dry_run}" = "yes" ]] && rsync_copy_opts="${rsync_copy_opts}n"
 
-rsync_opts=("${rsync_copy_opts}" "--info=progress2" "--exclude-from=${exclude_from}" "${source_dir}" "${mount_point}/${backup_name}")
+rsync_opts=("${rsync_copy_opts}" "--info=progress2" "--no-i-r" "--exclude-from=${exclude_from}" "${source_dir}" "${mount_point}/${backup_name}")
 prompt -i "Issuing command sudo rsync ${rsync_opts[*]}\n"
 sudo rsync "${rsync_opts[@]}"
 
