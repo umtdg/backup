@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO: Make this a nicer python script/application
+
 # Colors
 export c_default="\033[0m"
 export c_blue="\033[1;34m"
@@ -37,22 +39,16 @@ helpify() {
     printf "  ${c_blue}%s ${c_green}%s\n ${c_magenta}%s. ${c_cyan}%s\n\n${c_default}" "${1}" "${2}" "${3}" "${4}"
 }
 
-# Defaults
-devpath=""
-name="backupdrive"
-fstype="ext4"
-exclude_from="backup_exclude.txt"
-source_dir="/"
-external=""
-dry_run="no"
-
 usage() {
     helpify_title
-    helpify "-b --device" "DEV" "Device path" ""
-    helpify "-n --name" "NAME" "Name of the crypt device" "Default is ${name}"
-    helpify "-f --filesystem" "FS" "Filesystem of backup drive" "Default is ${fstype}"
+    helpify "-s --source" "DIR" "Directory to make a backup of" "Default is ${source_dir}"
+    helpify "-d --dest" "DIR" "Destination directory (Subdirectory is created, i.e. backup is made to <dest>/<backup>/)"
+    helpify "--create-dirs" "" "Create directories along the destination path (This does not create subdirectory inside destination. Subdirectory is already created automatically. This is to create directory tree of destination to ensure that it exists)" "Default is no"
     helpify "-e --exclude" "FILE" "File to use for excludes" "Default is ${exclude_from}"
-    helpify "-d --dir" "DIR" "Directory to backup" "Default is ${source_dir}"
+    helpify "-c --crypt" "" "Backup to a crypt device" "Default is no"
+    helpify "-b --device" "DEV" "Crypt device, only relevant with --crypt" ""
+    helpify "-n --name" "NAME" "Name of the crypt device, only relevant with --crypt" "Default is ${name}"
+    helpify "-f --filesystem" "FS" "Filesystem of backup drive, only relevant with --crypt" "Default is ${fstype}"
     helpify "--dry-run" "" "Dry run. Print everything instead of doing anything." ""
     helpify "-h --help" "" "Print this message and exit" ""
 }
@@ -90,6 +86,18 @@ close_device() {
     }
 }
 
+# Defaults
+devpath=""
+name="backupdrive"
+fstype="ext4"
+exclude_from=""
+source_dir="/"
+external=""
+dry_run="no"
+use_crypt_device="no"
+destination=""
+create_dirs="no"
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
     -b | --device)
@@ -108,9 +116,21 @@ while [[ $# -gt 0 ]]; do
         exclude_from="$2"
         shift 2
         ;;
-    -d | --dir)
+    -s | --source)
         source_dir="$2"
         shift 2
+        ;;
+    -c | --crypt)
+        use_crypt_device="yes"
+        shift
+        ;;
+    -d | --dest)
+        destination="$2"
+        shift 2
+        ;;
+    --create-dirs)
+        create_dirs="yes"
+        shift 1
         ;;
     --dry-run)
         dry_run="yes"
@@ -128,15 +148,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check params
-test -b "${devpath}" && prompt -s "Found device ${devpath}" || { prompt -e "Could not found device ${devpath}"; exit 1; }
 test -d "${source_dir}" && prompt -s "Found source directory ${source_dir}" || { prompt -e "Could not found source directory ${source_dir}"; exit 1; }
-test -f "${exclude_from}" && prompt -s "Found exclude file ${exclude_from}" || { prompt -e "Could not found exclude file ${exclude_from}"; exit 1; }
-case "${name}" in
-    */*)
-        prompt -e "Invalid name for crypt device: ${name}";
-        exit 1 ;;
-    *) ;;
-esac
+# test -f "${exclude_from}" && prompt -s "Found exclude file ${exclude_from}" || { prompt -e "Could not found exclude file ${exclude_from}"; exit 1; }
+if [ -n "${exclude_from}" ] && [ ! -f "${exclude_from}" ]; then
+    prompt -w "Could not found exclude file ${exclude_from}"
+    read -p "Do you want to continue?[y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy] ]]; then
+        prompt -i "Continuing without exclude file"
+    else
+        prompt -e "Exiting..."
+        exit 1
+    fi
+else
+    prompt -s "Found exclude file ${exclude_from}"
+fi
 
 # Add / at the end of source directory if not already ends with /
 case "${source_dir}" in
@@ -153,37 +179,67 @@ else
     backup_name="${backup_name}-$(basename "${source_dir}")-$(date +%F_%T)"
 fi
 
-# Mount point (where to mount decrypted deivce)
-mount_point="/tmp/${name}"
-mkdir -p "${mount_point}" || { prompt -e "Failed to create directory ${mount_point}"; exit 1; }
+if [ "${use_crypt_device}" = "yes" ]; then
+    test -b "${devpath}" && prompt -s "Found device ${devpath}" || { prompt -e "Could not found device ${devpath}"; exit 1; }
+    case "${name}" in
+        */*)
+            prompt -e "Invalid name for crypt device: ${name}";
+            exit 1 ;;
+        *) ;;
+    esac
 
-# Decrypt and mount device
-prompt -i "Opening device ${devpath} as ${name}"
-if ! sudo cryptsetup status "${name}" 2>&1 1>/dev/null; then
-    sudo cryptsetup open "${devpath}" "${name}" || { prompt -e "Could not open crypt device"; exit 1; }
+    # Mount point (where to mount decrypted deivce)
+    mount_point="/tmp/${name}"
+    mkdir -p "${mount_point}" || { prompt -e "Failed to create directory ${mount_point}"; exit 1; }
+
+    # Decrypt and mount device
+    prompt -i "Opening device ${devpath} as ${name}"
+    if ! sudo cryptsetup status "${name}" 2>&1 1>/dev/null; then
+        sudo cryptsetup open "${devpath}" "${name}" || { prompt -e "Could not open crypt device"; exit 1; }
+    else
+        prompt -i "Device is already opened"
+    fi
+
+    mountpoint -q "${mount_point}" 2>&1 1>/dev/null && { prompt -e "${mount_point} is already mounted. Please use a different name or unmount it manually"; exit 1; }
+    prompt -i "Mounting device /dev/mapper/${name} to ${mount_point}"
+    sudo mount "/dev/mapper/${name}" "${mount_point}" || { prompt -e "Failed to mount"; exit 1; }
+
+    destination="${mount_point}/${backup_name}"
 else
-    prompt -i "Device is already opened"
+    if [ "${create_dirs}" = "yes" ]; then
+        prompt -i "Creating ${destination}"
+        mkdir -p "${destination}" || { prompt -e "Failed to create ${destination}"; exit 1; }
+    else
+        test -d "${destination}" && prompt -s "Found destination directory ${destination}" || { prompt -e "Could not found destination directory ${destination}"; exit 1; }
+    fi
+    # Check if destination directory exists
+    case "${destination}" in
+        */)
+            destination="${destination}${backup_name}"
+            ;;
+        *)
+            destination="${destination}/${backup_name}"
+            ;;
+    esac
 fi
-
-mountpoint -q "${mount_point}" 2>&1 1>/dev/null && { prompt -e "${mount_point} is already mounted. Please use a different name or unmount it manually"; exit 1; }
-prompt -i "Mounting device /dev/mapper/${name} to ${mount_point}"
-sudo mount "/dev/mapper/${name}" "${mount_point}" || { prompt -e "Failed to mount"; exit 1; }
 
 rsync_copy_opts="-aAXHv"
 [[ "${dry_run}" = "yes" ]] && rsync_copy_opts="${rsync_copy_opts}n"
 
-rsync_opts=("${rsync_copy_opts}" "--info=progress2" "--no-i-r" "--exclude-from=${exclude_from}" "${source_dir}" "${mount_point}/${backup_name}")
+rsync_opts=("${rsync_copy_opts}" "--info=progress2" "--no-i-r" "--exclude-from=${exclude_from}" "${source_dir}" "${destination}")
 prompt -i "Issuing command sudo rsync ${rsync_opts[*]}\n"
 sudo rsync "${rsync_opts[@]}"
 
 echo
 
-# Unmount device
-prompt -i "Unmounting ${mount_point}"
-sudo umount "${mount_point}" || { prompt -e "Failed to unmount. May need manual inspection"; exit 1; }
-
-prompt -i "Removing folder ${mount_point}"
-rm -r "${mount_point}" || prompt -e "Could not remove ${mount_point}. The directory will be left existing"
-
-prompt -i "Closing crypt device ${name}"
-sudo cryptsetup close "${name}" || { prompt -e "Failed to close crypt device. May need manual inspection"; exit 1; }
+if [ "${use_crypt_device}" = "yes" ]; then
+    # Unmount device
+    prompt -i "Unmounting ${mount_point}"
+    sudo umount "${mount_point}" || { prompt -e "Failed to unmount. May need manual inspection"; exit 1; }
+    
+    prompt -i "Removing folder ${mount_point}"
+    rm -r "${mount_point}" || prompt -e "Could not remove ${mount_point}. The directory will be left existing"
+    
+    prompt -i "Closing crypt device ${name}"
+    sudo cryptsetup close "${name}" || { prompt -e "Failed to close crypt device. May need manual inspection"; exit 1; }
+fi
