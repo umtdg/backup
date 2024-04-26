@@ -12,6 +12,4 @@ cache/*
 /home/*/ssd500/*
 /home/*/ubuntu/*
 /home/*/wdbackup/*
-/home/*/wdmypassport/*
 /home/*/windows/*
-/home/*/ssd200/*
