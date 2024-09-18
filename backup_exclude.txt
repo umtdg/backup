@@ -13,3 +13,6 @@ cache/*
 /home/*/ubuntu/*
 /home/*/wdbackup/*
 /home/*/windows/*
+node_modules/*
+*venv*/*
+*wenv*/*
