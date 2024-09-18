@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-# TODO: Make this a nicer python script/application
-
 # Colors
 export c_default="\033[0m"
 export c_blue="\033[1;34m"
@@ -43,12 +41,13 @@ usage() {
     helpify_title
     helpify "-s --source" "DIR" "Directory to make a backup of" "Default is ${source_dir}"
     helpify "-d --dest" "DIR" "Destination directory (Subdirectory is created, i.e. backup is made to <dest>/<backup>/)"
-    helpify "--create-dirs" "" "Create directories along the destination path (This does not create subdirectory inside destination. Subdirectory is already created automatically. This is to create directory tree of destination to ensure that it exists)" "Default is no"
     helpify "-e --exclude" "FILE" "File to use for excludes" "Default is ${exclude_from}"
     helpify "-c --crypt" "" "Backup to a crypt device" "Default is no"
     helpify "-b --device" "DEV" "Crypt device, only relevant with --crypt" ""
     helpify "-n --name" "NAME" "Name of the crypt device, only relevant with --crypt" "Default is ${name}"
     helpify "-f --filesystem" "FS" "Filesystem of backup drive, only relevant with --crypt" "Default is ${fstype}"
+    helpify "--backup-name" "NAME" "Backup name to use for backup instead of source directory name" "Default is ${backup_name}"
+    helpify "--create-dirs" "" "Create directories along the destination path (This does not create subdirectory inside destination. Subdirectory is already created automatically. This is to create directory tree of destination to ensure that it exists)" "Default is no"
     helpify "--dry-run" "" "Dry run. Print everything instead of doing anything." ""
     helpify "-h --help" "" "Print this message and exit" ""
 }
@@ -97,6 +96,7 @@ dry_run="no"
 use_crypt_device="no"
 destination=""
 create_dirs="no"
+backup_name=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -107,6 +107,7 @@ while [[ $# -gt 0 ]]; do
     -s | --source) source_dir="$2"; shift 2; ;;
     -c | --crypt) use_crypt_device="yes"; shift; ;;
     -d | --dest) destination="$2"; shift 2; ;;
+    --backup-name) backup_name="$2"; shift 2; ;;
     --create-dirs) create_dirs="yes"; shift 1; ;;
     --dry-run) dry_run="yes"; shift; ;;
     -h | --help) usage; exit 0; ;;
@@ -139,12 +140,14 @@ case "${source_dir}" in
 esac
 
 # Backup name (destination directory name)
-backup_name="${HOSTNAME:-${USER:-unknown}}"
-if [ "${source_dir}" = "/" ]; then
-    backup_name="${backup_name}/root/$(date +%F_%T)"
-else
-    backup_name="${backup_name}/$(basename "${source_dir}")/$(date +%F_%T)"
+if [ -z "${backup_name}" ]; then
+    if [ "${source_dir}" = "/" ]; then
+        backup_name="root"
+    else
+        backup_name="$(basename "${source_dir}")"
+    fi
 fi
+backup_name="${HOSTNAME:-${USER:-unknown}}/${backup_name}/$(date +%F_%T)"
 
 if [ "${use_crypt_device}" = "yes" ]; then
     test -b "${devpath}" && log -s "Found device ${devpath}" || { log -e "Could not found device ${devpath}"; exit 1; }
