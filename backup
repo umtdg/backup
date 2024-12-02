@@ -147,7 +147,7 @@ if [ -z "${backup_name}" ]; then
         backup_name="$(basename "${source_dir}")"
     fi
 fi
-backup_name="${HOSTNAME:-${USER:-unknown}}/${backup_name}/$(date +%F_%T)"
+backup_name="${HOSTNAME:-${USER:-unknown}}/${backup_name}"
 
 if [ "${use_crypt_device}" = "yes" ]; then
     test -b "${devpath}" && log -s "Found device ${devpath}" || { log -e "Could not found device ${devpath}"; exit 1; }
