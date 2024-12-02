@@ -91,12 +91,12 @@ name="backupdrive"
 fstype="ext4"
 exclude_from=""
 source_dir="/"
-external=""
 dry_run="no"
 use_crypt_device="no"
 destination=""
 create_dirs="no"
 backup_name=""
+additional_rsync_opts=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -111,12 +111,14 @@ while [[ $# -gt 0 ]]; do
     --create-dirs) create_dirs="yes"; shift 1; ;;
     --dry-run) dry_run="yes"; shift; ;;
     -h | --help) usage; exit 0; ;;
+    --* | -*) additional_rsync_opts+=("$1"); shift; ;;
     *) usage; exit 1; ;;
     esac
 done
 
 # Check params
-test -d "${source_dir}" && log -s "Found source directory ${source_dir}" || { log -e "Could not found source directory ${source_dir}"; exit 1; }
+{ test -d "${source_dir}" && log -s "Found source directory ${source_dir}"; } \
+  || { log -e "Could not found source directory ${source_dir}"; exit 1; }
 # test -f "${exclude_from}" && log -s "Found exclude file ${exclude_from}" || { log -e "Could not found exclude file ${exclude_from}"; exit 1; }
 if [ -n "${exclude_from}" ] && [ ! -f "${exclude_from}" ]; then
     log -w "Could not found exclude file ${exclude_from}"
@@ -206,7 +208,7 @@ fi
 rsync_copy_opts="-aAXHv"
 [[ "${dry_run}" = "yes" ]] && rsync_copy_opts="${rsync_copy_opts}n"
 
-rsync_opts=("${rsync_copy_opts}" "--info=progress2" "--no-i-r" "--exclude-from=${exclude_from}" "${source_dir}" "${destination}")
+rsync_opts=("${rsync_copy_opts}" "--info=progress2" "--no-i-r" "--exclude-from=${exclude_from}" "${additional_rsync_opts[@]}" "${source_dir}" "${destination}")
 # log -i "Issuing command sudo rsync ${rsync_opts[*]}\n"
 log -i "Backing up ${c_blue}${source_dir}${c_default} to ${c_blue}${destination}${c_default}"
 sudo rsync "${rsync_opts[@]}"
